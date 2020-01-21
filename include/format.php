@@ -1,3 +1,4 @@
+
 <?php
 
 function number_format_short( $n, $precision = 1 ) {
