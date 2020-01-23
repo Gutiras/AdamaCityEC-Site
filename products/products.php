@@ -1,4 +1,12 @@
 <?php include 'includes/session.php'; ?>
+<?php
+  $where = '';
+  if(isset($_GET['category'])){
+    $catid = $_GET['category'];
+    $where = 'WHERE category_id ='.$catid;
+  }
+
+?>
 <?php include 'includes/header.php'; ?>
 <body class="hold-transition skin-blue sidebar-mini">
 <div class="wrapper">
@@ -8,7 +16,8 @@
 
   <!-- Content Wrapper. Contains page content -->
   <div class="content-wrapper">
-   
+    <!-- Content Header (Page header) -->
+    
 
     <!-- Main content -->
     <section class="content">
@@ -38,44 +47,65 @@
         <div class="col-xs-12">
           <div class="box">
             <div class="box-header with-border">
-              <a href="#addnew" data-toggle="modal" class="btn btn-primary btn-sm btn-flat"><i class="fa fa-plus"></i> New</a>
+              <a href="#addnew" data-toggle="modal" class="btn btn-primary btn-sm btn-flat" id="addproduct"><i class="fa fa-plus"></i> New</a>
+              <div class="pull-right">
+                <form class="form-inline">
+                  <div class="form-group">
+                    <label>Category: </label>
+                    <select class="form-control input-sm" id="select_category">
+                      <option value="0">ALL</option>
+                      <?php
+                        $conn = $pdo->open();
+
+                        $stmt = $conn->prepare("SELECT * FROM category");
+                        $stmt->execute();
+
+                        foreach($stmt as $crow){
+                          $selected = ($crow['id'] == $catid) ? 'selected' : ''; 
+                          echo "
+                            <option value='".$crow['id']."' ".$selected.">".$crow['name']."</option>
+                          ";
+                        }
+
+                        $pdo->close();
+                      ?>
+                    </select>
+                  </div>
+                </form>
+              </div>
             </div>
             <div class="box-body">
               <table id="example1" class="table table-bordered">
                 <thead>
-                  <th>Photo</th>
-                  <th>Email</th>
                   <th>Name</th>
-                  <th>Status</th>
-                  <th>Date Added</th>
-                  <th>Tools</th>
+                  <th>Photo</th>
+                  <th>Description</th>
+                  <th>Price</th>
+                  <th>Views Today</th>
+                  
                 </thead>
                 <tbody>
                   <?php
                     $conn = $pdo->open();
 
                     try{
-                      $stmt = $conn->prepare("SELECT * FROM users WHERE type=:type");
-                      $stmt->execute(['type'=>0]);
+                      $now = date('Y-m-d');
+                      $stmt = $conn->prepare("SELECT * FROM products $where");
+                      $stmt->execute();
                       foreach($stmt as $row){
-                        $image = (!empty($row['photo'])) ? '../images/'.$row['photo'] : '../images/profile.jpg';
-                        $status = ($row['status']) ? '<span class="label label-success">active</span>' : '<span class="label label-danger">not verified</span>';
-                        $active = (!$row['status']) ? '<span class="pull-right"><a href="#activate" class="status" data-toggle="modal" data-id="'.$row['id'].'"><i class="fa fa-check-square-o"></i></a></span>' : '';
+                        $image = (!empty($row['photo'])) ? '../images/'.$row['photo'] : '../images/noimage.jpg';
+                        $counter = ($row['date_view'] == $now) ? $row['counter'] : 0;
                         echo "
                           <tr>
+                            <td>".$row['name']."</td>
                             <td>
                               <img src='".$image."' height='30px' width='30px'>
-                              <span class='pull-right'><a href='#edit_photo' class='photo' data-toggle='modal' data-id='".$row['id']."'><i class='fa fa-edit'></i></a></span>
+                             
                             </td>
-                            <td>".$row['email']."</td>
-                            <td>".$row['firstname'].' '.$row['lastname']."</td>
+                            <td><a href='#description' data-toggle='modal' class='btn btn-info btn-sm btn-flat desc' data-id='".$row['id']."'><i class='fa fa-search'></i> View</a></td>
+                            <td>&#36; ".number_format($row['price'], 2)."</td>
+                            <td>".$counter."</td>
                             <td>
-                              ".$status."
-                              ".$active."
-                            </td>
-                            <td>".date('M d, Y', strtotime($row['created_on']))."</td>
-                            <td>
-                              <a href='cart.php?user=".$row['id']."' class='btn btn-info btn-sm btn-flat'><i class='fa fa-search'></i> Cart</a>
                               <button class='btn btn-success btn-sm edit btn-flat' data-id='".$row['id']."'><i class='fa fa-edit'></i> Edit</button>
                               <button class='btn btn-danger btn-sm delete btn-flat' data-id='".$row['id']."'><i class='fa fa-trash'></i> Delete</button>
                             </td>
@@ -99,7 +129,8 @@
      
   </div>
   	<?php include 'includes/footer.php'; ?>
-    <?php include 'includes/users_modal.php'; ?>
+    <?php include 'includes/products_modal.php'; ?>
+    <?php include 'includes/products_modal2.php'; ?>
 
 </div>
 <!-- ./wrapper -->
@@ -107,7 +138,6 @@
 <?php include 'includes/scripts.php'; ?>
 <script>
 $(function(){
-
   $(document).on('click', '.edit', function(e){
     e.preventDefault();
     $('#edit').modal('show');
@@ -128,10 +158,33 @@ $(function(){
     getRow(id);
   });
 
-  $(document).on('click', '.status', function(e){
+  $(document).on('click', '.desc', function(e){
     e.preventDefault();
     var id = $(this).data('id');
     getRow(id);
+  });
+
+  $('#select_category').change(function(){
+    var val = $(this).val();
+    if(val == 0){
+      window.location = 'products.php';
+    }
+    else{
+      window.location = 'products.php?category='+val;
+    }
+  });
+
+  $('#addproduct').click(function(e){
+    e.preventDefault();
+    getCategory();
+  });
+
+  $("#addnew").on("hidden.bs.modal", function () {
+      $('.append_items').remove();
+  });
+
+  $("#edit").on("hidden.bs.modal", function () {
+      $('.append_items').remove();
   });
 
 });
@@ -139,18 +192,29 @@ $(function(){
 function getRow(id){
   $.ajax({
     type: 'POST',
-    url: 'users_row.php',
+    url: 'products_row.php',
     data: {id:id},
     dataType: 'json',
     success: function(response){
-      $('.userid').val(response.id);
-      $('#edit_email').val(response.email);
-      $('#edit_password').val(response.password);
-      $('#edit_firstname').val(response.firstname);
-      $('#edit_lastname').val(response.lastname);
-      $('#edit_address').val(response.address);
-      $('#edit_contact').val(response.contact_info);
-      $('.fullname').html(response.firstname+' '+response.lastname);
+      $('#desc').html(response.description);
+      $('.name').html(response.prodname);
+      $('.prodid').val(response.prodid);
+      $('#edit_name').val(response.prodname);
+      $('#catselected').val(response.category_id).html(response.catname);
+      $('#edit_price').val(response.price);
+      CKEDITOR.instances["editor2"].setData(response.description);
+      getCategory();
+    }
+  });
+}
+function getCategory(){
+  $.ajax({
+    type: 'POST',
+    url: 'category_fetch.php',
+    dataType: 'json',
+    success:function(response){
+      $('#category').append(response);
+      $('#edit_category').append(response);
     }
   });
 }
